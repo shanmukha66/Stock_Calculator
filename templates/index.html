@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Tracker & Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
+    <style>
+        .profit { color: #28a745; }
+        .loss { color: #dc3545; }
+        .update-flash {
+            animation: flash 1s ease-in-out;
+        }
+        @keyframes flash {
+            0% { background-color: #f8f9fa; }
+            50% { background-color: #e9ecef; }
+            100% { background-color: #f8f9fa; }
+        }
+        .chart-container {
+            height: 200px;
+            margin-top: 20px;
+        }
+        .recommendation {
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .recommendation.strong-buy {
+            background-color: #28a745;
+            color: white;
+        }
+        .recommendation.buy {
+            background-color: #5cb85c;
+            color: white;
+        }
+        .recommendation.hold {
+            background-color: #f0ad4e;
+            color: white;
+        }
+        .recommendation.sell {
+            background-color: #d9534f;
+            color: white;
+        }
+        .recommendation.strong-sell {
+            background-color: #dc3545;
+            color: white;
+        }
+        .reason-item {
+            margin-bottom: 5px;
+            padding: 5px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .stock-metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .metric {
+            background-color: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .metric-label {
+            font-weight: bold;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Stock Tracker & Analyzer</h1>
+            <a href="/calculator" class="btn btn-primary">Profit Calculator</a>
+        </div>
+        
+        <!-- Alerts Container -->
+        <div id="alerts-container" class="mb-3"></div>
+        
+        <!-- Add Stock Form -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Add Stock to Track (Maximum 5)</h5>
+            </div>
+            <div class="card-body">
+                <form id="stock-form" class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Ticker Symbol</label>
+                        <input type="text" class="form-control" id="ticker" name="ticker" required placeholder="e.g., AAPL, MSFT, GOOGL">
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Add Stock</button>
+                        <button type="button" class="btn btn-danger" onclick="clearStocks()">Clear All</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Live Stock Tracking -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Live Stock Tracking</h5>
+                <div>
+                    <span id="status-message" class="me-3"></span>
+                    <span id="last-update" class="text-light">Last Update: Loading...</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="stocks-container">
+                    <div class="text-center" id="loading-message">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading stock data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const charts = {};
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add event listener for the stock form
+            document.getElementById('stock-form').addEventListener('submit', addStock);
+        });
+
+        function createStockCard(stock) {
+            const dailyChangeClass = stock.daily_change >= 0 ? 'profit' : 'loss';
+            const dailyChangeIcon = stock.daily_change >= 0 ? 
+                '<i class="bi bi-arrow-up-circle-fill"></i>' : 
+                '<i class="bi bi-arrow-down-circle-fill"></i>';
+            
+            const recommendationClass = getRecommendationClass(stock.buy_recommendation.recommendation);
+            
+            return `
+                <div class="card mb-3 update-flash">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title mb-0">${stock.company_name} (${stock.ticker})</h5>
+                            <small class="text-muted">${stock.sector}</small>
+                        </div>
+                        <div class="text-end">
+                            <h4 class="mb-0">${stock.formatted.current_price}</h4>
+                            <span class="${dailyChangeClass}">${dailyChangeIcon} ${stock.formatted.daily_change}</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="stock-metrics">
+                            <div class="metric">
+                                <span class="metric-label">Market Cap:</span> ${stock.formatted.market_cap}
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">P/E Ratio:</span> ${stock.formatted.pe_ratio}
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Dividend Yield:</span> ${stock.formatted.dividend_yield}
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">52-Week Range:</span> ${stock.formatted.fifty_two_week_low} - ${stock.formatted.fifty_two_week_high}
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Target Price:</span> ${stock.formatted.target_price} (${stock.formatted.potential_change})
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Recommendation</h6>
+                                <div class="recommendation ${recommendationClass}">
+                                    ${stock.buy_recommendation.recommendation}
+                                </div>
+                                <div class="mt-2">
+                                    <h6>Reasons:</h6>
+                                    <ul class="list-unstyled">
+                                        ${stock.buy_recommendation.reasons.map(reason => 
+                                            `<li class="reason-item"><i class="bi bi-check-circle"></i> ${reason}</li>`
+                                        ).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="chart-container">
+                                    <canvas id="chart-${stock.ticker}"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getRecommendationClass(recommendation) {
+            switch(recommendation.toLowerCase()) {
+                case 'strong buy': return 'strong-buy';
+                case 'buy': return 'buy';
+                case 'hold': return 'hold';
+                case 'sell': return 'sell';
+                case 'strong sell': return 'strong-sell';
+                default: return 'hold';
+            }
+        }
+
+        function createChart(stock) {
+            const ctx = document.getElementById(`chart-${stock.ticker}`).getContext('2d');
+            if (charts[stock.ticker]) {
+                charts[stock.ticker].destroy();
+            }
+
+            const dates = stock.history.map(h => h.date);
+            const prices = stock.history.map(h => h.price);
+
+            charts[stock.ticker] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Stock Price',
+                        data: prices,
+                        borderColor: '#0d6efd',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `$${context.parsed.y.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                                displayFormats: {
+                                    day: 'MMM d'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        },
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Price ($)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        let updateInterval;
+        const statusMessage = document.getElementById('status-message');
+        const loadingMessage = document.getElementById('loading-message');
+
+        function showError(message) {
+            statusMessage.textContent = `Error: ${message}`;
+            statusMessage.style.color = '#dc3545';
+        }
+
+        function showSuccess() {
+            statusMessage.textContent = 'Updated successfully';
+            statusMessage.style.color = '#28a745';
+            setTimeout(() => {
+                statusMessage.textContent = '';
+            }, 3000);
+        }
+
+        function updateStockData() {
+            console.log("Starting stock data update...");
+            loadingMessage.style.display = 'block';
+            
+            return fetch('/get_stocks')
+                .then(response => {
+                    console.log("API response status:", response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Received data:", data);
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    const container = document.getElementById('stocks-container');
+                    if (data.stocks.length === 0) {
+                        console.log("No stocks found in data");
+                        container.innerHTML = '<div class="alert alert-info">No stocks added yet. Use the form above to add stocks to track.</div>';
+                    } else {
+                        console.log(`Found ${data.stocks.length} stocks to display`);
+                        container.innerHTML = data.stocks.map(stock => {
+                            console.log(`Creating card for ${stock.ticker}`);
+                            return createStockCard(stock);
+                        }).join('');
+                        
+                        // Create charts with a slight delay to ensure DOM elements are ready
+                        setTimeout(() => {
+                            data.stocks.forEach(stock => {
+                                if (stock.history && stock.history.length > 0) {
+                                    console.log(`Creating chart for ${stock.ticker} with ${stock.history.length} data points`);
+                                    try {
+                                        createChart(stock);
+                                    } catch (chartError) {
+                                        console.error(`Error creating chart for ${stock.ticker}:`, chartError);
+                                    }
+                                } else {
+                                    console.warn(`No history data for ${stock.ticker}`);
+                                }
+                            });
+                        }, 100);
+                    }
+                    
+                    document.getElementById('last-update').textContent = `Last Update: ${data.portfolio.last_update}`;
+                    showSuccess();
+                    return data; // Return data for chaining
+                })
+                .catch(error => {
+                    console.error('Error fetching stock data:', error);
+                    showError(error.message);
+                    
+                    // Show error message in container if it's empty
+                    const container = document.getElementById('stocks-container');
+                    if (!container.innerHTML || container.innerHTML.trim() === '') {
+                        container.innerHTML = `
+                            <div class="alert alert-danger">
+                                <h5>Error loading stock data</h5>
+                                <p>${error.message}</p>
+                                <p>Please try refreshing the page or adding a different stock.</p>
+                            </div>
+                        `;
+                    }
+                    throw error; // Re-throw for promise chaining
+                })
+                .finally(() => {
+                    loadingMessage.style.display = 'none';
+                    console.log("Stock data update completed");
+                });
+        }
+
+        function addStock(event) {
+            event.preventDefault();
+            console.log("Add stock function called");
+            
+            const ticker = document.getElementById('ticker').value.toUpperCase();
+            console.log("Ticker value:", ticker);
+            
+            if (!ticker) {
+                showAlert('Please enter a ticker symbol', 'danger');
+                return;
+            }
+            
+            // Disable the submit button and show loading state
+            const submitBtn = document.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Adding...';
+            
+            const url = `/add_stock?ticker=${ticker}`;
+            console.log("Fetching from:", url);
+            
+            // First, test if the server is responding
+            fetch('/test')
+                .then(response => {
+                    console.log("Test endpoint response status:", response.status);
+                    if (!response.ok) {
+                        throw new Error(`Server test failed with status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(testData => {
+                    console.log("Server test response:", testData);
+                    
+                    // Now try to add the stock
+                    return fetch(url);
+                })
+                .then(response => {
+                    console.log("Add stock response status:", response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Add stock response data:", data);
+                    
+                    // Re-enable the submit button
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                    
+                    if (data.error) {
+                        console.error("Error from API:", data.error);
+                        if (data.error.includes('API rate limit')) {
+                            showAlert('Finnhub API rate limit reached. Please wait a minute before trying again.', 'warning');
+                        } else {
+                            showAlert(data.error, 'danger');
+                        }
+                        return;
+                    }
+                    
+                    // Clear the form
+                    document.getElementById('ticker').value = '';
+                    
+                    // Create a stock card with the returned data
+                    const stocksContainer = document.getElementById('stocks-container');
+                    stocksContainer.innerHTML = createStockCard(data) + stocksContainer.innerHTML;
+                    
+                    // Create chart with a slight delay
+                    setTimeout(() => {
+                        if (data.history && data.history.length > 0) {
+                            try {
+                                createChart(data);
+                            } catch (chartError) {
+                                console.error(`Error creating chart for ${data.ticker}:`, chartError);
+                            }
+                        }
+                    }, 100);
+                    
+                    showAlert(`${ticker} added successfully!`, 'success');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                    showAlert(`Failed to add stock: ${error.message}. Please try again.`, 'danger');
+                });
+        }
+
+        function updateStocks() {
+            fetch('/get_stocks')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        if (data.error.includes('API rate limit')) {
+                            console.warn('API rate limit reached. Will try again later.');
+                            // Don't show an alert to avoid spamming the user
+                            return;
+                        }
+                        showAlert(data.error, 'danger');
+                        return;
+                    }
+                    
+                    // Update each stock card with the latest data
+                    const stocksContainer = document.getElementById('stocks-container');
+                    stocksContainer.innerHTML = '';
+                    
+                    data.stocks.forEach(stock => {
+                        createStockCard(stock);
+                    });
+                    
+                    updatePortfolioSummary();
+                    
+                    // Update the last updated time
+                    const lastUpdated = document.getElementById('last-updated');
+                    const now = new Date();
+                    lastUpdated.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+                })
+                .catch(error => {
+                    console.error('Error updating stocks:', error);
+                });
+        }
+
+        function showAlert(message, type) {
+            const alertsContainer = document.getElementById('alerts-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            alertsContainer.appendChild(alert);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                alert.classList.remove('show');
+                setTimeout(() => {
+                    alertsContainer.removeChild(alert);
+                }, 150);
+            }, 5000);
+        }
+
+        function clearStocks() {
+            // Confirm before clearing
+            if (!confirm('Are you sure you want to clear all tracked stocks?')) {
+                return;
+            }
+            
+            const clearButton = document.querySelector('button.btn-danger');
+            const originalButtonText = clearButton.textContent;
+            clearButton.disabled = true;
+            clearButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Clearing...';
+            
+            fetch('/clear_stocks', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(() => {
+                updateStockData();
+                showSuccess();
+                statusMessage.textContent = 'All stocks cleared';
+            })
+            .catch(error => {
+                console.error('Error clearing stocks:', error);
+                showError(error.message || 'Failed to clear stocks');
+            })
+            .finally(() => {
+                clearButton.disabled = false;
+                clearButton.textContent = originalButtonText;
+            });
+        }
+
+        // Update data every 6.67 seconds (9 times per minute)
+        updateStockData();
+        updateInterval = setInterval(updateStockData, 6670);
+
+        // Add a manual refresh button
+        document.querySelector('.card-header.bg-success').innerHTML += `
+            <button id="refresh-button" class="btn btn-sm btn-light ms-2" onclick="manualRefresh()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        `;
+
+        function manualRefresh() {
+            const refreshButton = document.getElementById('refresh-button');
+            refreshButton.disabled = true;
+            refreshButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            
+            // Clear any existing interval
+            clearInterval(updateInterval);
+            
+            // Perform update
+            updateStockData()
+                .finally(() => {
+                    refreshButton.disabled = false;
+                    refreshButton.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh';
+                    
+                    // Restart interval
+                    updateInterval = setInterval(updateStockData, 6670);
+                });
+        }
+
+        window.addEventListener('unload', () => {
+            clearInterval(updateInterval);
+        });
+
+        function updatePortfolioSummary() {
+            // This function is a placeholder for now
+            console.log("Portfolio summary updated");
+        }
+    </script>
+</body>
+</html> 

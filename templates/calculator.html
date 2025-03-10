@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Profit Calculator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
+    <style>
+        .profit { color: #28a745; }
+        .loss { color: #dc3545; }
+        .report-section {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .report-section h3 {
+            color: #0056b3;
+            margin-bottom: 20px;
+        }
+        .cost-details {
+            margin-left: 20px;
+        }
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+        }
+        .insight-card {
+            background-color: #f8f9fa;
+            border-left: 4px solid #0d6efd;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+        }
+        .insight-card.positive {
+            border-left-color: #28a745;
+        }
+        .insight-card.negative {
+            border-left-color: #dc3545;
+        }
+        .insight-card.neutral {
+            border-left-color: #6c757d;
+        }
+        .insight-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Python Stock Profit Calculator</h1>
+            <a href="/" class="btn btn-primary">Stock Tracker</a>
+        </div>
+
+        <div class="row">
+            <!-- Calculator Form -->
+            <div class="col-md-6">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Compute Your Profit</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="calculator-form">
+                            <div class="mb-3">
+                                <label class="form-label">Ticker Symbol:</label>
+                                <input type="text" class="form-control" name="ticker" required placeholder="e.g., AAPL, MSFT, GOOGL">
+                                <div class="form-text">Enter the stock symbol to fetch current data</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Allotment:</label>
+                                <input type="number" class="form-control" name="allotment" required placeholder="Number of shares">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Final Share Price:</label>
+                                <input type="number" class="form-control" name="final_price" step="0.01" required placeholder="Selling price per share">
+                                <div class="form-text">Price at which you plan to sell</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Sell Commission:</label>
+                                <input type="number" class="form-control" name="sell_commission" step="0.01" required placeholder="Commission fee for selling">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Initial Share Price:</label>
+                                <input type="number" class="form-control" name="initial_price" step="0.01" required placeholder="Purchase price per share">
+                                <div class="form-text">Price at which you bought the shares</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Buy Commission:</label>
+                                <input type="number" class="form-control" name="buy_commission" step="0.01" required placeholder="Commission fee for buying">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Capital Gain Tax Rate (%):</label>
+                                <input type="number" class="form-control" name="capital_gain_tax_rate" step="0.01" required placeholder="Tax rate percentage">
+                                <div class="form-text">Your applicable tax rate on investment gains</div>
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">Calculate</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Example Card -->
+                <div class="card mt-3 shadow-sm">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="card-title mb-0">Example Values</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-1"><strong>ADBE Example:</strong></p>
+                        <ul class="list-unstyled">
+                            <li>Ticker: ADBE</li>
+                            <li>Allotment: 100</li>
+                            <li>Final Share Price: 110</li>
+                            <li>Sell Commission: 15</li>
+                            <li>Initial Share Price: 25</li>
+                            <li>Buy Commission: 10</li>
+                            <li>Capital Gain Tax Rate: 15%</li>
+                        </ul>
+                        <button type="button" class="btn btn-sm btn-info" onclick="fillExampleValues()">Fill Example Values</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div class="col-md-6">
+                <div class="card shadow-sm position-relative">
+                    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="card-header bg-success text-white">
+                        <h5 class="card-title mb-0">PROFIT REPORT</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="results" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Proceeds</h6>
+                                    <p id="proceeds" class="h4"></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Cost</h6>
+                                    <p id="cost" class="h4"></p>
+                                </div>
+                            </div>
+
+                            <h6 class="mt-4">Cost details:</h6>
+                            <div class="cost-details">
+                                <p>Total Purchase Price</p>
+                                <p id="purchase-price-detail"></p>
+                                <p id="buy-commission-detail"></p>
+                                <p id="sell-commission-detail"></p>
+                                <p id="tax-detail"></p>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <h6>Net Profit</h6>
+                                    <p id="net-profit" class="h4"></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Return on Investment</h6>
+                                    <p id="roi" class="h4"></p>
+                                </div>
+                            </div>
+
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <h6>Break Even Price</h6>
+                                    <p id="break-even" class="h4"></p>
+                                </div>
+                                <div class="col-md-6" id="recovery-time-container">
+                                    <h6>Recovery Time</h6>
+                                    <p id="days-to-recover" class="h4"></p>
+                                </div>
+                            </div>
+
+                            <div id="insights-container" class="mt-4">
+                                <!-- Insights will be added here -->
+                            </div>
+
+                            <div class="chart-container">
+                                <canvas id="price-history"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div id="no-results" class="text-center py-5">
+                            <i class="bi bi-calculator fs-1 text-muted"></i>
+                            <p class="mt-3 text-muted">Enter your stock details and click Calculate to see the profit report.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let priceChart = null;
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(amount);
+        }
+
+        async function fetchStockHistory(ticker) {
+            try {
+                const response = await fetch(`/api/stocks?ticker=${ticker}`);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                const data = await response.json();
+                if (data.stocks && data.stocks[0] && data.stocks[0].history) {
+                    return data.stocks[0].history;
+                }
+                return [];
+            } catch (error) {
+                console.error('Error fetching stock history:', error);
+                return [];
+            }
+        }
+
+        function updateChart(history) {
+            const ctx = document.getElementById('price-history').getContext('2d');
+            
+            if (priceChart) {
+                priceChart.destroy();
+            }
+
+            const dates = history.map(h => h.date);
+            const prices = history.map(h => h.price);
+
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Stock Price History (30 Days)',
+                        data: prices,
+                        borderColor: '#0d6efd',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `$${context.parsed.y.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                                displayFormats: {
+                                    day: 'MMM d'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        },
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Price ($)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function generateInsights(data) {
+            const insightsContainer = document.getElementById('insights-container');
+            insightsContainer.innerHTML = '';
+            
+            const insights = [];
+            
+            // ROI insight
+            if (data.roi > 20) {
+                insights.push({
+                    title: 'Excellent Return on Investment',
+                    content: `Your ROI of ${data.formatted.roi} is significantly higher than the average annual stock market return of 7-10%.`,
+                    type: 'positive'
+                });
+            } else if (data.roi > 10) {
+                insights.push({
+                    title: 'Good Return on Investment',
+                    content: `Your ROI of ${data.formatted.roi} exceeds the average annual stock market return of 7-10%.`,
+                    type: 'positive'
+                });
+            } else if (data.roi > 0) {
+                insights.push({
+                    title: 'Positive Return',
+                    content: `Your investment is profitable with an ROI of ${data.formatted.roi}, but it's below the historical average annual stock market return of 7-10%.`,
+                    type: 'neutral'
+                });
+            } else {
+                insights.push({
+                    title: 'Negative Return',
+                    content: `Your investment is currently showing a loss with an ROI of ${data.formatted.roi}.`,
+                    type: 'negative'
+                });
+            }
+            
+            // Tax impact insight
+            const taxPercentage = (data.tax / data.net_profit * 100).toFixed(1);
+            if (data.tax > 0) {
+                insights.push({
+                    title: 'Tax Impact',
+                    content: `Capital gains tax reduces your profit by ${data.formatted.tax} (${taxPercentage}% of your gross profit).`,
+                    type: 'neutral'
+                });
+            }
+            
+            // Break even insight
+            if (data.break_even > data.initial_price) {
+                const breakEvenPercentage = ((data.break_even / data.initial_price - 1) * 100).toFixed(1);
+                insights.push({
+                    title: 'Break Even Analysis',
+                    content: `You need the stock to rise to ${data.formatted.break_even} (${breakEvenPercentage}% above your purchase price) just to break even after commissions and taxes.`,
+                    type: 'neutral'
+                });
+            }
+            
+            // Recovery time insight (if loss)
+            if (data.days_to_recover > 0) {
+                const years = (data.days_to_recover / 365).toFixed(1);
+                insights.push({
+                    title: 'Recovery Time',
+                    content: `At the average market return of 7% annually, it would take approximately ${data.formatted.days_to_recover} (${years} years) to recover this loss.`,
+                    type: 'negative'
+                });
+            }
+            
+            // Commission impact insight
+            const totalCommission = data.buy_commission + data.sell_commission;
+            const commissionPercentage = (totalCommission / data.proceeds * 100).toFixed(1);
+            if (commissionPercentage > 1) {
+                insights.push({
+                    title: 'Commission Impact',
+                    content: `Trading commissions (${formatCurrency(totalCommission)}) represent ${commissionPercentage}% of your total proceeds, which is relatively high.`,
+                    type: 'negative'
+                });
+            }
+            
+            // Render insights
+            insights.forEach(insight => {
+                insightsContainer.innerHTML += `
+                    <div class="insight-card ${insight.type}">
+                        <div class="insight-title">${insight.title}</div>
+                        <div>${insight.content}</div>
+                    </div>
+                `;
+            });
+        }
+
+        function fillExampleValues() {
+            document.querySelector('input[name="ticker"]').value = 'ADBE';
+            document.querySelector('input[name="allotment"]').value = '100';
+            document.querySelector('input[name="final_price"]').value = '110';
+            document.querySelector('input[name="sell_commission"]').value = '15';
+            document.querySelector('input[name="initial_price"]').value = '25';
+            document.querySelector('input[name="buy_commission"]').value = '10';
+            document.querySelector('input[name="capital_gain_tax_rate"]').value = '15';
+        }
+
+        document.getElementById('calculator-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Show loading overlay
+            document.getElementById('loading-overlay').style.display = 'flex';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('no-results').style.display = 'none';
+            
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            
+            try {
+                // Fetch historical data
+                const history = await fetchStockHistory(data.ticker);
+                
+                // Call the API for calculation
+                const response = await fetch('/api/calculate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ticker: data.ticker,
+                        allotment: parseFloat(data.allotment),
+                        final_price: parseFloat(data.final_price),
+                        sell_commission: parseFloat(data.sell_commission),
+                        initial_price: parseFloat(data.initial_price),
+                        buy_commission: parseFloat(data.buy_commission),
+                        capital_gain_tax_rate: parseFloat(data.capital_gain_tax_rate)
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Calculation failed');
+                }
+                
+                const result = await response.json();
+                
+                // Update chart
+                updateChart(history);
+                
+                // Update the display
+                document.getElementById('proceeds').textContent = result.formatted.proceeds;
+                document.getElementById('cost').textContent = result.formatted.total_cost;
+                document.getElementById('purchase-price-detail').textContent = 
+                    `${result.allotment} × ${result.formatted.initial_price} = ${result.formatted.purchase_price}`;
+                document.getElementById('buy-commission-detail').textContent = 
+                    `Buy Commission = ${result.formatted.buy_commission}`;
+                document.getElementById('sell-commission-detail').textContent = 
+                    `Sell Commission = ${result.formatted.sell_commission}`;
+                document.getElementById('tax-detail').textContent = 
+                    `Tax on Capital Gain = ${data.capital_gain_tax_rate}% of ${result.formatted.capital_gain} = ${result.formatted.tax}`;
+                
+                // Set profit/loss color
+                const netProfitElement = document.getElementById('net-profit');
+                const roiElement = document.getElementById('roi');
+                
+                netProfitElement.textContent = result.formatted.net_profit;
+                roiElement.textContent = result.formatted.roi;
+                
+                if (result.net_profit >= 0) {
+                    netProfitElement.className = 'h4 profit';
+                    roiElement.className = 'h4 profit';
+                } else {
+                    netProfitElement.className = 'h4 loss';
+                    roiElement.className = 'h4 loss';
+                }
+                
+                document.getElementById('break-even').textContent = result.formatted.break_even;
+                
+                // Show/hide recovery time based on profit/loss
+                const recoveryTimeContainer = document.getElementById('recovery-time-container');
+                if (result.days_to_recover > 0) {
+                    document.getElementById('days-to-recover').textContent = result.formatted.days_to_recover;
+                    recoveryTimeContainer.style.display = 'block';
+                } else {
+                    recoveryTimeContainer.style.display = 'none';
+                }
+                
+                // Generate insights
+                generateInsights(result);
+                
+                // Show results
+                document.getElementById('results').style.display = 'block';
+                document.getElementById('no-results').style.display = 'none';
+            } catch (error) {
+                console.error('Error calculating profit:', error);
+                alert('Error calculating profit. Please check your inputs and try again.');
+                document.getElementById('no-results').style.display = 'block';
+                document.getElementById('results').style.display = 'none';
+            } finally {
+                // Hide loading overlay
+                document.getElementById('loading-overlay').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html> 

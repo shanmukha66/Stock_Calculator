@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Recommendations - Stock Profit Calculator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css" rel="stylesheet">
+    <style>
+        .positive { color: #28a745; }
+        .negative { color: #dc3545; }
+        .recommendation-buy { background-color: #d4edda; }
+        .recommendation-sell { background-color: #f8d7da; }
+        .recommendation-hold { background-color: #fff3cd; }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            transition: transform 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">Stock Profit Calculator</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">Stock Recommendations</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/portfolio">Portfolio Tracker</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1 class="text-center mb-4">Stock Recommendations</h1>
+        
+        <!-- Market Overview -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Market Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="row" id="market-overview">
+                    <p class="text-center">Loading market data...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stock Recommendations -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Stock Analysis & Recommendations</h5>
+                <span id="last-update" class="text-light"></span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Stock</th>
+                                <th>Price</th>
+                                <th>Change</th>
+                                <th>Target</th>
+                                <th>Recommendation</th>
+                                <th>P/E Ratio</th>
+                                <th>Market Cap</th>
+                                <th>Volatility</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recommendations-table">
+                            <tr>
+                                <td colspan="8" class="text-center">Loading recommendations...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Information -->
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="card-title mb-0">Investment Tips</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">📈 Look for stocks with strong fundamentals and growth potential</li>
+                            <li class="list-group-item">💰 Consider the P/E ratio when evaluating stock value</li>
+                            <li class="list-group-item">📊 Monitor market volatility and trading volumes</li>
+                            <li class="list-group-item">🎯 Pay attention to analyst price targets</li>
+                            <li class="list-group-item">📱 Track technology and industry trends</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="card-title mb-0">Market Insights</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="market-insights">
+                            <p class="mb-3">• High volatility stocks require closer monitoring</p>
+                            <p class="mb-3">• Consider dividend yields for income generation</p>
+                            <p class="mb-3">• Watch trading volumes for market interest</p>
+                            <p class="mb-3">• Compare current prices with target prices</p>
+                            <p class="mb-3">• Diversify across different sectors</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function updateRecommendations() {
+            fetch('/api/recommendations')
+                .then(response => response.json())
+                .then(data => {
+                    const tableBody = document.getElementById('recommendations-table');
+                    tableBody.innerHTML = data.map(stock => `
+                        <tr class="recommendation-${stock.recommendation.toLowerCase()}">
+                            <td>
+                                <strong>${stock.ticker}</strong><br>
+                                <small class="text-muted">${stock.name}</small>
+                            </td>
+                            <td>${stock.current_price}</td>
+                            <td class="${parseFloat(stock.change_percent) >= 0 ? 'positive' : 'negative'}">
+                                ${stock.change_percent}
+                            </td>
+                            <td>${stock.target_price}</td>
+                            <td><strong>${stock.recommendation}</strong></td>
+                            <td>${stock.pe_ratio}</td>
+                            <td>${stock.market_cap}</td>
+                            <td>${stock.volatility}</td>
+                        </tr>
+                    `).join('');
+
+                    document.getElementById('last-update').textContent = 
+                        `Last updated: ${new Date().toLocaleTimeString()}`;
+                })
+                .catch(error => console.error('Error fetching recommendations:', error));
+        }
+
+        // Update data every 30 seconds
+        updateRecommendations();
+        setInterval(updateRecommendations, 30000);
+    </script>
+</body>
+</html> 
