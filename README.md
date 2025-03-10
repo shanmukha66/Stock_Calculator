@@ -139,8 +139,9 @@ The profit calculation includes:
 - ROI = (Net Profit / Total Cost) × 100
 - Break Even Price = (Total Purchase Price + Buy Commission + Sell Commission) / Allotment
 
-## License
-This project is licensed under the MIT License - see the LICENSE file for details.
+##Output Images
+![alt text]{1.png}
+![alt text]{2.png}
 
 ## Acknowledgements
 - [Finnhub](https://finnhub.io/) for providing stock data
