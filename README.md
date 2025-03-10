@@ -141,7 +141,8 @@ The profit calculation includes:
 
 ##Output Images
 ![Screenshot 1](1.png)
-![Screenshot 2](2.png)
+
+![Screenshot 2](3.png)
 
 ## Acknowledgements
 - [Finnhub](https://finnhub.io/) for providing stock data
