@@ -140,8 +140,8 @@ The profit calculation includes:
 - Break Even Price = (Total Purchase Price + Buy Commission + Sell Commission) / Allotment
 
 ##Output Images
-![alt text]{1.png}
-![alt text]{2.png}
+![alt text]{/1.png}
+![alt text]{/2.png}
 
 ## Acknowledgements
 - [Finnhub](https://finnhub.io/) for providing stock data
